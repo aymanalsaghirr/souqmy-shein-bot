@@ -18,7 +18,7 @@ def run_server():
 # ----------------------------------------------
 
 # ضع التوكن الجديد هنا بعد تغييره في BotFather
-TOKEN = "8871899951:AAHl7umC0vzRbwsu4bWs3Dmejlv5tP7jl9g"
+TOKEN = "8871899951:AAGcoT8IQwY2DLWKKwePQ8weNFVa-oxDcgM"
 bot = telebot.TeleBot(TOKEN)
 
 # دالة المنطق الرياضي لحساب السعر
