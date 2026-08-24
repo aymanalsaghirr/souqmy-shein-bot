@@ -16,7 +16,7 @@ def run_server():
     app.run(host="0.0.0.0", port=port)
 
 # ضع التوكن الخاص بك هنا
-TOKEN = "8871899951:AAGcoT8IQwY2DLWKKwePQ8weNFVa-oxDcgM"
+TOKEN = "غغ"
 bot = telebot.TeleBot(TOKEN)
 
 # قاموس لتخزين روابط المستخدمين مؤقتاً
