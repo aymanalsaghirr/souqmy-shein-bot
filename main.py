@@ -68,7 +68,11 @@ def handle_query(call):
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+           # 🛡️ إضافة تمويه للمتصفح ليتخطى حماية شي إن
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
+            )
             
             # إعداد المتصفح كـ "هاتف ذكي"
             context = browser.new_context(
@@ -81,15 +85,17 @@ def handle_query(call):
                 has_touch=True
             )
             page = context.new_page()
-            page.goto(url, timeout=60000)
             
-            # الانتظار حتى يظهر هيكل المنتج تماماً وتجاوز الشاشة البيضاء
-            try:
-                page.wait_for_selector('.product-intro, .goods-detail', timeout=15000)
-            except:
-                pass
-            page.wait_for_timeout(3000) # وقت إضافي لاستقرار الصور والأسعار
-
+            # الانتظار حتى يتم تحميل محتوى الصفحة بالكامل
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            
+            # ⏳ إجبار البوت على الانتظار 6 ثوانٍ كاملة لتتلاشى الشاشة البيضاء وتظهر الأسعار
+            page.wait_for_timeout(6000) 
+            
+            # 📜 النزول قليلاً لأسفل الصفحة لإجبار الصور والأسعار على الظهور (Lazy Load)
+            page.mouse.wheel(0, 500)
+            page.wait_for_timeout(2000)
+            
             if action == "price":
                 try:
                     # استخراج الأسعار بطريقة ذكية تبحث عن الحاويات في صفحة شي إن
