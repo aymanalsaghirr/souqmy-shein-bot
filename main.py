@@ -95,14 +95,22 @@ def handle_query(call):
                 bot.edit_message_text(f"✅ النتائج:\n\n{final_text}", chat_id=chat_id, message_id=msg.message_id)
 
 elif action == "screen":
-                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بالكامل وتجنب الصورة البيضاء
+                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بالكامل
                 page.wait_for_timeout(5000)
                 
                 screenshot_path = "product.png"
-                page.screenshot(path=screenshot_path, full_page=True)
+                try:
+                    # محاولة تحديد وعزل قسم صور المنتج الأساسية في موقع شي إن لتصويره وحده
+                    product_element = page.locator('.product-intro__left').first
+                    product_element.screenshot(path=screenshot_path)
+                except:
+                    # إذا لم يتم العثور على القسم، يلتقط صورة عادية كخطة بديلة
+                    page.screenshot(path=screenshot_path)
+
                 with open(screenshot_path, 'rb') as photo:
-                    bot.send_photo(chat_id, photo, caption="📸 لقطة شاشة للمنتج من سوقمي")
+                    bot.send_photo(chat_id, photo, caption="📸 صورة المنتج الواضحة من سوقمي 🇸🇦")
                 bot.delete_message(chat_id, msg.message_id)
+
             
             elif action == "images":
                  bot.edit_message_text("جاري سحب الصور وإضافة الهوية البصرية...", chat_id=chat_id, message_id=msg.message_id)
