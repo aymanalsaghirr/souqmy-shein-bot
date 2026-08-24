@@ -2,12 +2,23 @@ import os
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from playwright.sync_api import sync_playwright
-from PIL import Image
-from io import BytesIO
-import requests
+from flask import Flask
+import threading
+
+# --- إعداد الخادم الوهمي لإرضاء منصة Render ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running on Render!"
+
+def run_server():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+# ----------------------------------------------
 
 # ضع التوكن الجديد هنا بعد تغييره في BotFather
-TOKEN = "8871899951:AAHl7umC0vzRbwsu4bWs3Dmejlv5tP7jl9g"
+TOKEN = "ضع_التوكن_الجديد_هنا_ولا_تشاركه_أبداً"
 bot = telebot.TeleBot(TOKEN)
 
 # دالة المنطق الرياضي لحساب السعر
@@ -41,7 +52,6 @@ def handle_message(message):
     else:
         bot.reply_to(message, "يرجى إرسال رابط صحيح من شي إن.")
 
-# معالجة ضغطات الأزرار
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     action, url = call.data.split("|", 1)
@@ -51,9 +61,7 @@ def handle_query(call):
 
     try:
         with sync_playwright() as p:
-            # تشغيل متصفح مخفي
             browser = p.chromium.launch(headless=True)
-            # تعيين الموقع للسعودية لضمان عملة SAR
             context = browser.new_context(
                 locale='ar-SA',
                 geolocation={'latitude': 24.7136, 'longitude': 46.6753}, 
@@ -64,20 +72,16 @@ def handle_query(call):
             page.wait_for_load_state('networkidle')
 
             if action == "price":
-                # ملاحظة: كلاسات شي إن تتغير، يجب تحديث الـ selectors لاحقاً بناءً على فحص الصفحة
-                # هذا كود افتراضي لمحاكاة سحب السعر الأسود والأحمر
                 try:
-                    # محاولة سحب السعر الأساسي والمخفض (يجب تعديل الـ CSS Selectors لاحقاً)
-                    black_price_text = page.locator('.original-price').inner_text() # افتراضي
-                    red_price_text = page.locator('.discount-price').inner_text() # افتراضي
+                    black_price_text = page.locator('.original-price').inner_text() 
+                    red_price_text = page.locator('.discount-price').inner_text() 
                     
                     black_price = float(black_price_text.replace('SAR', '').strip())
                     red_price = float(red_price_text.replace('SAR', '').strip())
                     
                     final_text = calculate_price_logic(black_price, red_price)
                 except:
-                    # في حال لم يجد سعر أحمر
-                    final_text = "السعر الأساسي: لم يتم تحديد الهيكل بعد (تحتاج ضبط Selectors)"
+                    final_text = "السعر الأساسي: لم يتم تحديد الهيكل بعد (تحتاج ضبط Selectors لاحقاً)"
 
                 bot.edit_message_text(f"✅ النتائج:\n\n{final_text}", chat_id=call.message.chat.id, message_id=msg.message_id)
 
@@ -87,20 +91,23 @@ def handle_query(call):
                 with open(screenshot_path, 'rb') as photo:
                     bot.send_photo(call.message.chat.id, photo, caption="📸 لقطة شاشة للمنتج")
                 bot.delete_message(call.message.chat.id, msg.message_id)
-
+            
             elif action == "images":
-                # سحب الصور وإضافة شعار سوقمي
-                bot.edit_message_text("جاري سحب الصور وإضافة الهوية البصرية...", chat_id=call.message.chat.id, message_id=msg.message_id)
-                # هنا يتم برمجة جلب الـ src للصور، دمج اللوجو باستخدام مكتبة Pillow (PIL)
-                # وإرسالها كألبوم (MediaGroup)
-                
+                 bot.edit_message_text("جاري سحب الصور وإضافة الهوية البصرية...", chat_id=call.message.chat.id, message_id=msg.message_id)
+            
             elif action == "cart":
-                bot.edit_message_text("🛒 قريباً: ميزة سحب السلة تتطلب رابط 'مشاركة السلة' من العميل للمرور على عناصرها.", chat_id=call.message.chat.id, message_id=msg.message_id)
+                 bot.edit_message_text("🛒 قريباً: ميزة سحب السلة...", chat_id=call.message.chat.id, message_id=msg.message_id)
 
             browser.close()
             
     except Exception as e:
         bot.edit_message_text(f"❌ حدث خطأ: {str(e)}", chat_id=call.message.chat.id, message_id=msg.message_id)
 
-print("Bot is running...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    # تشغيل الخادم الوهمي في مسار منفصل
+    server_thread = threading.Thread(target=run_server)
+    server_thread.start()
+    
+    # تشغيل البوت
+    print("Bot is running...")
+    bot.infinity_polling()
