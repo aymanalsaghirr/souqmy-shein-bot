@@ -39,7 +39,6 @@ def handle_message(message):
     if "shein" in url:
         # ضمان توجيه الرابط تلقائياً للمتجر السعودي إذا كان رابطاً عاماً
         if "sa.shein.com" not in url and "ar.shein.com" not in url:
-            # استبدال النطاق لضمان فتحه في المتجر السعودي
             url = url.replace("www.shein.com", "sa.shein.com").replace("m.shein.com", "sa.shein.com")
             
         user_data[message.chat.id] = url
@@ -59,7 +58,6 @@ def handle_query(call):
     action = call.data
     chat_id = call.message.chat.id
     
-    # استرجاع الرابط من ذاكرة البوت
     url = user_data.get(chat_id)
     if not url:
         bot.answer_callback_query(call.id, "❌ عذراً، يرجى إرسال الرابط مجدداً.")
@@ -71,10 +69,16 @@ def handle_query(call):
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
+            
+            # 📱 إعداد المتصفح ليعمل كـ "هاتف آيفون" تماماً (موبايل فيو) لتجنب الشاشة العريضة والفراغات البيضاء
             context = browser.new_context(
+                viewport={'width': 390, 'height': 844},
+                user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
                 locale='ar-SA',
                 geolocation={'latitude': 24.7136, 'longitude': 46.6753}, 
-                permissions=['geolocation']
+                permissions=['geolocation'],
+                is_mobile=True,
+                has_touch=True
             )
             page = context.new_page()
             page.goto(url, timeout=60000)
@@ -94,23 +98,17 @@ def handle_query(call):
 
                 bot.edit_message_text(f"✅ النتائج:\n\n{final_text}", chat_id=chat_id, message_id=msg.message_id)
 
-elif action == "screen":
-                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بالكامل
+            elif action == "screen":
+                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بداخل شاشة الجوال
                 page.wait_for_timeout(5000)
                 
                 screenshot_path = "product.png"
-                try:
-                    # محاولة تحديد وعزل قسم صور المنتج الأساسية في موقع شي إن لتصويره وحده
-                    product_element = page.locator('.product-intro__left').first
-                    product_element.screenshot(path=screenshot_path)
-                except:
-                    # إذا لم يتم العثور على القسم، يلتقط صورة عادية كخطة بديلة
-                    page.screenshot(path=screenshot_path)
+                # التقاط الشاشة الظاهرة فقط (الشاشة الرئيسية للمنتج) بدون مساحات بيضاء وبمقاس هاتف
+                page.screenshot(path=screenshot_path, full_page=False)
 
                 with open(screenshot_path, 'rb') as photo:
-                    bot.send_photo(chat_id, photo, caption="📸 صورة المنتج الواضحة من سوقمي 🇸🇦")
+                    bot.send_photo(chat_id, photo, caption="📸 صورة المنتج (تصميم جوال) من سوقمي 🇸🇦")
                 bot.delete_message(chat_id, msg.message_id)
-
             
             elif action == "images":
                  bot.edit_message_text("جاري سحب الصور وإضافة الهوية البصرية...", chat_id=chat_id, message_id=msg.message_id)
