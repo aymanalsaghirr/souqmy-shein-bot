@@ -37,17 +37,20 @@ def handle_message(message):
     url = message.text.strip()
     
     if "shein" in url:
-        # حفظ الرابط في القاموس برقم محادثة العميل
+        # ضمان توجيه الرابط تلقائياً للمتجر السعودي إذا كان رابطاً عاماً
+        if "sa.shein.com" not in url and "ar.shein.com" not in url:
+            # استبدال النطاق لضمان فتحه في المتجر السعودي
+            url = url.replace("www.shein.com", "sa.shein.com").replace("m.shein.com", "sa.shein.com")
+            
         user_data[message.chat.id] = url
         
         markup = InlineKeyboardMarkup()
-        # الأزرار أصبحت بدون الرابط لتخطي شرط 64 حرف
         markup.row(InlineKeyboardButton("💰 جلب السعر والمقاسات", callback_data="price"))
         markup.row(InlineKeyboardButton("📸 التقاط صورة (Screenshot)", callback_data="screen"))
         markup.row(InlineKeyboardButton("🖼️ سحب الصور بشعار سوقمي", callback_data="images"))
         markup.row(InlineKeyboardButton("🛒 استخراج بيانات السلة", callback_data="cart"))
         
-        bot.reply_to(message, "مرحباً بك في نظام تسعير سوقمي! 🚀\nاختر العملية المطلوبة للرابط:", reply_markup=markup)
+        bot.reply_to(message, "مرحباً بك في نظام تسعير سوقمي (السعودية 🇸🇦)\nاختر العملية المطلوبة للرابط:", reply_markup=markup)
     else:
         bot.reply_to(message, "يرجى إرسال رابط صحيح من شي إن.")
 
@@ -91,11 +94,14 @@ def handle_query(call):
 
                 bot.edit_message_text(f"✅ النتائج:\n\n{final_text}", chat_id=chat_id, message_id=msg.message_id)
 
-            elif action == "screen":
+elif action == "screen":
+                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بالكامل وتجنب الصورة البيضاء
+                page.wait_for_timeout(5000)
+                
                 screenshot_path = "product.png"
-                page.screenshot(path=screenshot_path)
+                page.screenshot(path=screenshot_path, full_page=True)
                 with open(screenshot_path, 'rb') as photo:
-                    bot.send_photo(chat_id, photo, caption="📸 لقطة شاشة للمنتج")
+                    bot.send_photo(chat_id, photo, caption="📸 لقطة شاشة للمنتج من سوقمي")
                 bot.delete_message(chat_id, msg.message_id)
             
             elif action == "images":
