@@ -1,4 +1,5 @@
 import os
+import re
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from playwright.sync_api import sync_playwright
@@ -18,7 +19,7 @@ def run_server():
 TOKEN = "8871899951:AAGcoT8IQwY2DLWKKwePQ8weNFVa-oxDcgM"
 bot = telebot.TeleBot(TOKEN)
 
-# قاموس لتخزين روابط المستخدمين مؤقتاً لحل مشكلة طول الرابط
+# قاموس لتخزين روابط المستخدمين مؤقتاً
 user_data = {}
 
 def calculate_price_logic(black_price, red_price=None):
@@ -28,16 +29,15 @@ def calculate_price_logic(black_price, red_price=None):
     discount = ((black_price - red_price) / black_price) * 100
     
     if discount <= 5.0:
-        return f"السعر الأصلي: {black_price} SAR\nالسعر بعد الخصم ({discount:.0f}%): {red_price} SAR"
+        return f"السعر الأصلي: {black_price} SAR\nالسعر بعد الخصم ({discount:.1f}%): {red_price} SAR"
     else:
-        return f"السعر المعتمد: {black_price} SAR (بدون كوبونات/خصم إضافي)"
+        return f"السعر المعتمد: {black_price} SAR (نسبة الخصم تتجاوز 5%، لا يتم تطبيق الخصم الإضافي)"
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text.strip()
     
     if "shein" in url:
-        # ضمان توجيه الرابط تلقائياً للمتجر السعودي إذا كان رابطاً عاماً
         if "sa.shein.com" not in url and "ar.shein.com" not in url:
             url = url.replace("www.shein.com", "sa.shein.com").replace("m.shein.com", "sa.shein.com")
             
@@ -51,6 +51,7 @@ def handle_message(message):
         
         bot.reply_to(message, "مرحباً بك في نظام تسعير سوقمي (السعودية 🇸🇦)\nاختر العملية المطلوبة للرابط:", reply_markup=markup)
     else:
+ مشغّل صوتي
         bot.reply_to(message, "يرجى إرسال رابط صحيح من شي إن.")
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -70,7 +71,7 @@ def handle_query(call):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             
-            # 📱 إعداد المتصفح ليعمل كـ "هاتف آيفون" تماماً (موبايل فيو) لتجنب الشاشة العريضة والفراغات البيضاء
+            # إعداد المتصفح كـ "هاتف ذكي"
             context = browser.new_context(
                 viewport={'width': 390, 'height': 844},
                 user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
@@ -82,32 +83,55 @@ def handle_query(call):
             )
             page = context.new_page()
             page.goto(url, timeout=60000)
-            page.wait_for_load_state('networkidle')
+            
+            # الانتظار حتى يظهر هيكل المنتج تماماً وتجاوز الشاشة البيضاء
+            try:
+                page.wait_for_selector('.product-intro, .goods-detail', timeout=15000)
+            except:
+                pass
+            page.wait_for_timeout(3000) # وقت إضافي لاستقرار الصور والأسعار
 
             if action == "price":
                 try:
-                    black_price_text = page.locator('.original-price').inner_text() 
-                    red_price_text = page.locator('.discount-price').inner_text() 
+                    # استخراج الأسعار بطريقة ذكية تبحث عن الحاويات في صفحة شي إن
+                    price_data = page.evaluate("""() => {
+                        const originalElem = document.querySelector('.original-price, .goods-price__sale, [class*="original"], [class*="price"]');
+                        const discountElem = document.querySelector('.discount-price, .goods-price__current, [class*="discount"], [class*="current-price"]');
+                        return {
+                            original: originalElem ? originalElem.innerText : null,
+                            discount: discountElem ? discountElem.innerText : null
+                        };
+                    }""")
                     
-                    black_price = float(black_price_text.replace('SAR', '').strip())
-                    red_price = float(red_price_text.replace('SAR', '').strip())
+                    def extract_num(text):
+                        if not text: return None
+                        match = re.search(r'[\d,.]+', text.replace(',', ''))
+                        return float(match.group()) if match else None
+
+                    black_price = extract_num(price_data.get('original'))
+                    red_price = extract_num(price_data.get('discount'))
                     
-                    final_text = calculate_price_logic(black_price, red_price)
-                except:
-                    final_text = "السعر الأساسي: لم يتم تحديد الهيكل بعد (تحتاج ضبط Selectors لاحقاً)"
+                    # إذا وجد سعراً واحداً فقط، نعتبره الأساسي
+                    if not black_price and red_price:
+                        black_price = red_price
+                        red_price = None
+
+                    if black_price:
+                        final_text = calculate_price_logic(black_price, red_price)
+                    else:
+                        final_text = "⚠️ لم يتم جلب الأسعار تلقائياً، يرجى التأكد من الرابط."
+                except Exception as e:
+                    final_text = f"❌ خطأ في قراءة الأسعار: {str(e)}"
 
                 bot.edit_message_text(f"✅ النتائج:\n\n{final_text}", chat_id=chat_id, message_id=msg.message_id)
 
             elif action == "screen":
-                # الانتظار 5 ثوانٍ لضمان تحميل صور شي إن بداخل شاشة الجوال
-                page.wait_for_timeout(5000)
-                
                 screenshot_path = "product.png"
-                # التقاط الشاشة الظاهرة فقط (الشاشة الرئيسية للمنتج) بدون مساحات بيضاء وبمقاس هاتف
+                # التقاط الشاشة الظاهرة فقط للجوال (بدون مساحات بيضاء وبدون إطالة الصفحة)
                 page.screenshot(path=screenshot_path, full_page=False)
 
                 with open(screenshot_path, 'rb') as photo:
-                    bot.send_photo(chat_id, photo, caption="📸 صورة المنتج (تصميم جوال) من سوقمي 🇸🇦")
+                    bot.send_photo(chat_id, photo, caption="📸 صورة المنتج (تصميم جوال واضح) من سوقمي 🇸🇦")
                 bot.delete_message(chat_id, msg.message_id)
             
             elif action == "images":
@@ -119,7 +143,7 @@ def handle_query(call):
             browser.close()
             
     except Exception as e:
-        bot.edit_message_text(f"❌ حدث خطأ: {str(e)}", chat_id=chat_id, message_id=msg.message_id)
+        bot.edit_message_text(f"❌ حدث خطأ عام: {str(e)}", chat_id=chat_id, message_id=msg.message_id)
 
 if __name__ == "__main__":
     server_thread = threading.Thread(target=run_server)
