@@ -51,7 +51,6 @@ def handle_message(message):
         
         bot.reply_to(message, "مرحباً بك في نظام تسعير سوقمي (السعودية 🇸🇦)\nاختر العملية المطلوبة للرابط:", reply_markup=markup)
     else:
- مشغّل صوتي
         bot.reply_to(message, "يرجى إرسال رابط صحيح من شي إن.")
 
 @bot.callback_query_handler(func=lambda call: True)
