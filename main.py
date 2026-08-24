@@ -5,7 +5,7 @@ from playwright.sync_api import sync_playwright
 from flask import Flask
 import threading
 
-# --- إعداد الخادم الوهمي لإرضاء منصة Render ---
+
 app = Flask(__name__)
 
 @app.route('/')
